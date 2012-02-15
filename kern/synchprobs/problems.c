@@ -48,17 +48,47 @@
 // the top of the corresponding driver code.
 
 void whalemating_init() {
-  return;
+
+    extern int male_head, male_tail, female_head, female_tail;
+    extern struct lock *pop_lock;
+    extern struct cv *maker_cv;
+
+    male_head = male_tail = 0;
+    female_head = female_tail = 0;
+
+    pop_lock = lock_create("population");
+    if(pop_lock == NULL) {
+        panic("whalemating: lock failed\n");
+    }
+
+    maker_cv = cv_create("maker cv");
+    if(maker_cv == NULL) {
+        panic("whalemating: condition variable failed\n");
+    }
+
+    //return;
 }
 
 void
 male(void *p, unsigned long which)
 {
 	struct semaphore * whalematingMenuSemaphore = (struct semaphore *)p;
-  (void)which;
-  
+  //(void)which;
+
   male_start();
-	// Implement this function 
+	// Implement this function
+    extern int male_tail, female_head, female_tail;
+    extern unsigned long male_pop[];
+    extern struct lock *pop_lock;
+    extern struct cv *maker_cv;
+
+    lock_acquire(pop_lock);
+    male_pop[male_tail++] = which;
+
+    if(female_head != female_tail)
+        cv_signal(maker_cv, pop_lock);
+    lock_release(pop_lock);
+
   male_end();
 
   // 08 Feb 2012 : GWA : Please do not change this code. This is so that your
@@ -71,12 +101,23 @@ void
 female(void *p, unsigned long which)
 {
 	struct semaphore * whalematingMenuSemaphore = (struct semaphore *)p;
-  (void)which;
-  
+  //(void)which;
+
   female_start();
-	// Implement this function 
+	// Implement this function
+    extern int male_head, male_tail, female_tail;
+    extern unsigned long female_pop[];
+    extern struct lock *pop_lock;
+    extern struct cv *maker_cv;
+
+    lock_acquire(pop_lock);
+    female_pop[female_tail++] = which;
+    if(male_head != male_tail)
+        cv_signal(maker_cv, pop_lock);
+    lock_release(pop_lock);
+
   female_end();
-  
+
   // 08 Feb 2012 : GWA : Please do not change this code. This is so that your
   // whalemating driver can return to the menu cleanly.
   V(whalematingMenuSemaphore);
@@ -88,11 +129,23 @@ matchmaker(void *p, unsigned long which)
 {
 	struct semaphore * whalematingMenuSemaphore = (struct semaphore *)p;
   (void)which;
-  
+
   matchmaker_start();
-	// Implement this function 
+	// Implement this function
+    extern int male_head, male_tail, female_head, female_tail;
+    extern unsigned long male_pop[], female_pop[];
+    extern struct lock *pop_lock;
+    extern struct cv *maker_cv;
+
+	lock_acquire(pop_lock);
+	while((male_head==male_tail)||(female_head==female_tail))
+        cv_wait(maker_cv, pop_lock);
+
+    kprintf("Male %ld, Female %ld, and Maker %ld\n", male_pop[male_head++], female_pop[female_head++], which);
+    lock_release(pop_lock);
+
   matchmaker_end();
-  
+
   // 08 Feb 2012 : GWA : Please do not change this code. This is so that your
   // whalemating driver can return to the menu cleanly.
   V(whalematingMenuSemaphore);
@@ -110,7 +163,7 @@ matchmaker(void *p, unsigned long which)
  * 3       1
  *    3 2
  * --     --
- *   | 2 | 
+ *   | 2 |
  *
  * As way to think about it, assuming cars drive on the right: a car entering
  * the intersection from direction X will enter intersection quadrant X
@@ -139,7 +192,7 @@ gostraight(void *p, unsigned long direction)
 {
 	struct semaphore * stoplightMenuSemaphore = (struct semaphore *)p;
   (void)direction;
-  
+
   // 08 Feb 2012 : GWA : Please do not change this code. This is so that your
   // stoplight driver can return to the menu cleanly.
   V(stoplightMenuSemaphore);
@@ -151,7 +204,7 @@ turnleft(void *p, unsigned long direction)
 {
 	struct semaphore * stoplightMenuSemaphore = (struct semaphore *)p;
   (void)direction;
-  
+
   // 08 Feb 2012 : GWA : Please do not change this code. This is so that your
   // stoplight driver can return to the menu cleanly.
   V(stoplightMenuSemaphore);

@@ -65,24 +65,32 @@ matchmaker_end(void)
 
 struct semaphore * whalematingMenuSemaphore;
 
+// added
+struct lock *pop_lock;
+struct cv *maker_cv;
+
+volatile unsigned long male_pop[NMATING];
+volatile unsigned long female_pop[NMATING];
+volatile int male_head, male_tail, female_head, female_tail;
+
 int
 whalemating(int nargs, char **args)
 {
 
 	int i, j, err=0;
-	
+
 	(void)nargs;
 	(void)args;
 
   whalematingMenuSemaphore = sem_create("Whalemating Driver Semaphore", 0);
   if (whalematingMenuSemaphore == NULL) {
-    
+
     // 08 Feb 2012 : GWA : Probably out of memory, or you broke our
     // semaphores! Panicing might be an overreaction, but why not?
-    
+
     panic("whalemating: sem_create failed.\n");
   }
- 
+
   // 13 Feb 2012 : GWA : Students are smarter than me.
   whalemating_init();
 
@@ -114,7 +122,8 @@ whalemating(int nargs, char **args)
     }
   }
   sem_destroy(whalematingMenuSemaphore);
-
+    lock_destroy(pop_lock);
+    cv_destroy(maker_cv);
 	return 0;
 }
 
@@ -134,7 +143,7 @@ whalemating(int nargs, char **args)
  * considered in quadrant 0 until you call inQuadrant(3). After you call
  * inQuadrant(2), the car is considered in quadrant 2 until you call
  * leaveIntersection().
- * 
+ *
  * As in the whalemating example, we will use the output from these functions
  * to verify the correctness of your solution. These functions may spin for
  * arbitrary periods of time or yield.
@@ -164,26 +173,26 @@ stoplight(int nargs, char **args)
   (void)args;
   int i, direction, turn, err=0;
   char name[32];
-  
+
   stoplightMenuSemaphore = sem_create("Stoplight Driver Semaphore", 0);
   if (stoplightMenuSemaphore == NULL) {
-    
+
     // 08 Feb 2012 : GWA : Probably out of memory, or you broke our
     // semaphores! Panicing might be an overreaction, but why not?
-    
+
     panic("stoplight: sem_create failed.\n");
   }
-  
+
   // 13 Feb 2012 : GWA : Students are smarter than me.
   stoplight_init();
 
   for (i = 0; i < NCARS; i++) {
-    
+
     direction = random() % 4;
     turn = random() % 3;
-      
+
     snprintf(name, sizeof(name), "Car Thread %d", i);
-    
+
     switch(turn) {
       case 0:
         err = thread_fork(name, gostraight, stoplightMenuSemaphore,
@@ -199,11 +208,11 @@ stoplight(int nargs, char **args)
         break;
     }
   }
-  
+
   for (i = 0; i < NCARS; i++) {
     P(stoplightMenuSemaphore);
   }
-  
+
   sem_destroy(stoplightMenuSemaphore);
 
   return 0;
