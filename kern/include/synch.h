@@ -74,6 +74,10 @@ void V(struct semaphore *);
  */
 struct lock {
         char *lk_name;
+		volatile int lk_value;
+		struct thread *lk_holder;	// thread holding this lock
+		struct wchan *lk_wchan;
+		struct spinlock lk_lock;
         // add what you need here
         // (don't forget to mark things volatile as needed)
 };
@@ -87,7 +91,7 @@ void lock_acquire(struct lock *);
  *                   same time.
  *    lock_release - Free the lock. Only the thread holding the lock may do
  *                   this.
- *    lock_do_i_hold - Return true if the current thread holds the lock; 
+ *    lock_do_i_hold - Return true if the current thread holds the lock;
  *                   false otherwise.
  *
  * These operations must be atomic. You get to write them.
@@ -113,6 +117,7 @@ void lock_destroy(struct lock *);
 
 struct cv {
         char *cv_name;
+        struct wchan *cv_wchan;
         // add what you need here
         // (don't forget to mark things volatile as needed)
 };
@@ -127,7 +132,7 @@ void cv_destroy(struct cv *);
  *    cv_signal    - Wake up one thread that's sleeping on this CV.
  *    cv_broadcast - Wake up all threads sleeping on this CV.
  *
- * For all three operations, the current thread must hold the lock passed 
+ * For all three operations, the current thread must hold the lock passed
  * in. Note that under normal circumstances the same lock should be used
  * on all operations with any particular CV.
  *
@@ -137,5 +142,28 @@ void cv_wait(struct cv *cv, struct lock *lock);
 void cv_signal(struct cv *cv, struct lock *lock);
 void cv_broadcast(struct cv *cv, struct lock *lock);
 
+
+/*
+ * Reader-writer lock
+ *
+ */
+
+/*
+struct rw_lock {
+    char *rw_lock_name;
+    volatile int rw_lock_mode;  // 0 for available, -1 for read-mode, 1 for write-mode
+    volatile int rw_lock_count;
+    struct spinlock rw_lock_spinlock;
+    struct wchan *read_wchan;
+    struct wchan *write_wchan;
+    struct threadlist rw_list;
+};
+
+struct rw_lock *rw_lock_create(const char *name);
+void rw_lock_destory(struct rw_lock *rw);
+
+void rw_lock_acquire(struct rw_lock *rw, int mode);
+void rw_lock_release(struct rw_lock *rw);
+*/
 
 #endif /* _SYNCH_H_ */
