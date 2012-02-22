@@ -183,16 +183,80 @@ matchmaker(void *p, unsigned long which)
 // functions will allow you to do local initialization. They are called at
 // the top of the corresponding driver code.
 
+volatile int quad_status[4];
+struct lock *quad_lock;
+struct cv *quad_cv;
+
 void stoplight_init() {
-  return;
+
+	// @forkloop
+	//
+//	int quad_status[4];
+//	struct lock *quad_lock;
+//	struct cv *quad_cv;
+
+	quad_status[0]=quad_status[1]=quad_status[2]=quad_status[3]=0;
+
+	quad_lock = lock_create("quadrant lock");
+	if(quad_lock == NULL) {
+
+		panic("stoplight: lock created failure.\n");
+	}
+	quad_cv = cv_create("quadrant cv");
+	if(quad_cv == NULL) {
+
+		panic("stoplight: cv created failure.\n");
+	}
+/*
+    struct lock lock_list[4];
+    char lock_name[6];
+
+
+
+    for(int i=0;i<4;i++) {
+        snprintf(lock_name, sizeof(lock_name), "lock%d\0", i);
+        lock_list[i] = lock_create(lock_name);
+        if(lock_list[i] == NULL) {
+            panic("stoplight: lock created failure.\n");
+        }
+    }
+	//return;
+*/
 }
 
 void
 gostraight(void *p, unsigned long direction)
 {
 	struct semaphore * stoplightMenuSemaphore = (struct semaphore *)p;
-  (void)direction;
+  //(void)direction;
 
+  // @forkloop
+  //
+	int next;
+	next = (direction+3)%4;
+
+	lock_acquire(quad_lock);
+	while(quad_status[direction]||quad_status[next])
+		cv_wait(quad_cv, quad_lock);
+	quad_status[direction]=quad_status[next]=1;
+	// first quadrant
+	inQuadrant(direction);
+	lock_release(quad_lock);
+
+	// second quadrant
+	lock_acquire(quad_lock);
+	quad_status[direction]=0;
+	cv_signal(quad_cv, quad_lock);
+	lock_release(quad_lock);
+	inQuadrant(next);
+
+	// leave
+	lock_acquire(quad_lock);
+	quad_status[next]=0;
+	cv_signal(quad_cv, quad_lock);
+	lock_release(quad_lock);
+	leaveIntersection();
+	
   // 08 Feb 2012 : GWA : Please do not change this code. This is so that your
   // stoplight driver can return to the menu cleanly.
   V(stoplightMenuSemaphore);
@@ -203,7 +267,41 @@ void
 turnleft(void *p, unsigned long direction)
 {
 	struct semaphore * stoplightMenuSemaphore = (struct semaphore *)p;
-  (void)direction;
+  //(void)direction;
+
+    // @forkloop
+	// 
+    int next, nnext;
+    next = (direction+3)%4;
+    nnext = (direction+2)%4;
+
+    lock_acquire(quad_lock);
+	while(quad_status[direction]||quad_status[next])
+		cv_wait(quad_cv, quad_lock);
+	
+	//quad_status[direction]=quad_status[next]=1;
+	inQuadrant(direction);
+	quad_status[next] = 1;
+	inQuadrant(next);
+	//cv_signal(quad_cv);
+	lock_release(quad_lock);
+
+	// third quad
+	lock_acquire(quad_lock);
+	while(quad_status[nnext])
+		cv_wait(quad_cv, quad_lock);
+	quad_status[next] = 0;
+	quad_status[nnext] = 1;
+	cv_signal(quad_cv, quad_lock);
+	lock_release(quad_lock);
+	inQuadrant(nnext);
+
+	// leave
+	lock_acquire(quad_lock);
+	quad_status[nnext] = 0;
+	cv_signal(quad_cv, quad_lock);
+	lock_release(quad_lock);
+	leaveIntersection();
 
   // 08 Feb 2012 : GWA : Please do not change this code. This is so that your
   // stoplight driver can return to the menu cleanly.
@@ -215,7 +313,18 @@ void
 turnright(void *p, unsigned long direction)
 {
 	struct semaphore * stoplightMenuSemaphore = (struct semaphore *)p;
-  (void)direction;
+ // (void)direction;
+
+    // @forkloop
+	//
+    // this won't have deadlock
+    lock_acquire(quad_lock);
+	while (quad_status[direction]) {
+		cv_wait(quad_cv, quad_lock);
+	}
+    inQuadrant(direction);
+    leaveIntersection();
+    lock_release(quad_lock);
 
   // 08 Feb 2012 : GWA : Please do not change this code. This is so that your
   // stoplight driver can return to the menu cleanly.

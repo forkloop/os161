@@ -337,58 +337,61 @@ cv_broadcast(struct cv *cv, struct lock *lock)
 //
 // Reader-Writer Lock.
 
-/*
-struct rw_lock *
-rw_lock_create(const char *name)
+
+struct rwlock *
+rwlock_create(const char *name)
 {
-    struct rw_lock *rw;
+    struct rwlock *rw;
     char *read_wchan_name, *write_wchan_name;
 
-    rw = kmalloc(sizeof(struct rw_lock));
+    rw = kmalloc(sizeof(struct rwlock));
     if (rw == NULL) {
         return NULL;
     }
 
-    rw->rw_lock_name = kstrdup(name);
-    if (rw->rw_lock_name == NULL) {
+    rw->rwlock_name = kstrdup(name);
+    if (rw->rwlock_name == NULL) {
         kfree(rw);
         return NULL;
         }
 
+	// reader wait channel
     read_wchan_name = kmalloc(strlen(name) + 5);
     if (read_wchan_name == NULL) {
         return NULL;
     }
+	// use snprintf
     read_wchan_name = strcat(read_wchan_name, name);
     read_wchan_name = strcat(read_wchan_name, "read\0");
-	rw->read_wchan = wchan_create(read_wchan_name);
-	if (rw->read_wchan == NULL) {
+	rw->reader_wchan = wchan_create(read_wchan_name);
+	if (rw->reader_wchan == NULL) {
 	    kfree(read_wchan_name);
-		kfree(rw->rw_lock_name);
+		kfree(rw->rwlock_name);
 		kfree(rw);
 		return NULL;
 	}
 
+	// writer wait channel
     write_wchan_name = kmalloc(strlen(name) + 6);
     if (write_wchan_name == NULL) {
         return NULL;
     }
     write_wchan_name = strcat(write_wchan_name, name);
     write_wchan_name = strcat(write_wchan_name, "write\0");
-    rw->write_wchan = wchan_create(write_wchan_name);
-    if (rw->write_wchan == NULL) {
+    rw->writer_wchan = wchan_create(write_wchan_name);
+    if (rw->writer_wchan == NULL) {
         kfree(read_wchan_name);
         kfree(write_wchan_name);
-        kfree(rw->rw_lock_name);
+        kfree(rw->rwlock_name);
         kfree(rw);
         return NULL;
     }
 
-	spinlock_init(&rw->rw_lock_spinlock);
-    threadlist_init(&rw->rw_list);
+	spinlock_init(&rw->rwlock_spinlock);
+    threadlist_init(&rw->rwlock_list);
 
-    rw->rw_lock_count = 0;
-    rw->rw_lock_mode = 0;
+    rw->rwlock_count = 0;
+    rw->rwlock_mode = 0;
 
     kfree(read_wchan_name);
     kfree(write_wchan_name);
@@ -397,84 +400,133 @@ rw_lock_create(const char *name)
 }
 
 void
-rw_lock_destory(struct rw_lock *rw)
+rwlock_destroy(struct rwlock *rw)
 {
     KASSERT(rw != NULL);
 
 	// wchan_cleanup will assert if anyone's waiting on it
 
-	threadlist_cleanup(rw->write_wchan);
-	threadlist_cleanup(rw->read_wchan);
-	spinlock_cleanup(&rw->rw_lock_spinlock);
-	wchan_destroy(rw->rw_lock_wchan);
-    kfree(rw->rw_lock_name);
+	wchan_destroy(rw->writer_wchan);
+	wchan_destroy(rw->reader_wchan);
+	threadlist_cleanup(&rw->rwlock_list);
+	spinlock_cleanup(&rw->rwlock_spinlock);
+	// FIXME rwlock_list ??
+    kfree(rw->rwlock_name);
     kfree(rw);
 
 }
 
 void
-rw_lock_acquire(struct rw_lock *rw, int mode)
+rwlock_acquire_read(struct rwlock *rw)
 {
 
     KASSERT(rw != NULL);
-    KASSERT(mode == -1 || mode == 1);
+    //KASSERT(mode == -1 || mode == 1);
 
     // if current state is read
-    spinlock_acquire(&rw->rw_lock_spinlock);
-    if(rw->rw_lock_mode == -1) {
-        // if a writer acquires lock
-        if(mode == 1) {
-            wchan_lock(rw->write_wchan);
-            spinlock_release(&rw->rw_lock_spinlock);
-            wchan_sleep(rw->write_wchan);
+    spinlock_acquire(&rw->rwlock_spinlock);
+    if(rw->rwlock_mode == -1) {
+        // if total reader # excel MAX_NUM
+        if(rw->rwlock_count > 10) {
+            wchan_lock(rw->reader_wchan);
+            spinlock_release(&rw->rwlock_spinlock);
+            wchan_sleep(rw->reader_wchan);
         }
-        // else a reader acquires lock
+        // else add it into the threadlist
         else {
-            threadlist_addhead(rw->rw_list, curthread);
-            rw->rw_lock_count++;
-            spinlock_release(&rw->rw_lock_spinlock);
+            threadlist_addhead(&rw->rwlock_list, curthread);
+            rw->rwlock_count++;
+            spinlock_release(&rw->rwlock_spinlock);
         }
     }
     // if current state is write
-    else if(rw->rw_lock_mode == 1) {
-        if(mode == 1) {
-            wchan_lock(rw->write_wchan);
-            spinlock_release(&rw->rw_lock_spinlock);
-            wchan_sleep(rw->write_wchan);
-        }
-        else {
-            wchan_lock(rw->read_wchan);
-            spinlock_release(&rw->rw_lock_spinlock);
-            wchan_sleep(rw->read_wchan);
-        }
+    else if(rw->rwlock_mode == 1) {
+            wchan_lock(rw->reader_wchan);
+            spinlock_release(&rw->rwlock_spinlock);
+            wchan_sleep(rw->reader_wchan);
     }
     else {
-        rw->rw_lock_mode = mode;
-        rw->rw_lock_count++;
-        threadlist_addhead(rw->rw_list, curthread);
-        spinlock_release(rw->rw_lock_spinlock);
+		// we'll be in reader mode now
+        rw->rwlock_mode = -1;
+        rw->rwlock_count = 1; // safer
+		//rw->rwlock_count++;
+        threadlist_addhead(&rw->rwlock_list, curthread);
+        spinlock_release(&rw->rwlock_spinlock);
     }
 }
 
 void
-rw_lock_release(struct rw_lock *rw)
+rwlock_acquire_write(struct rwlock *rw)
+{
+	KASSERT(rw != NULL);
+
+	spinlock_acquire(&rw->rwlock_spinlock);
+	// we'll be in write mode
+	if (rw->rwlock_mode == 0) {
+
+		rw->rwlock_mode = 1;
+		rw->rwlock_count = 1;
+		threadlist_addhead(&rw->rwlock_list, curthread);
+		spinlock_release(&rw->rwlock_spinlock);
+		
+	}
+	else if (rw->rwlock_mode == 1) {
+
+		if(rw->rwlock_count == 0) {
+
+			rw->rwlock_count = 1;
+			threadlist_addhead(&rw->rwlock_list, curthread);
+			spinlock_release(&rw->rwlock_spinlock);
+		}
+		else {
+
+			wchan_lock(rw->writer_wchan);
+			spinlock_release(&rw->rwlock_spinlock);
+			wchan_sleep(rw->writer_wchan);
+		}
+	}
+	else {
+		// if it is in reader mode
+
+		wchan_lock(rw->writer_wchan);
+		spinlock_release(&rw->rwlock_spinlock);
+		wchan_sleep(rw->writer_wchan);
+	}
+}
+
+void
+rwlock_release_read(struct rwlock *rw)
 {
 
     KASSERT(rw != NULL);
 
-    spinlock_acquire(&rw->rw_lock_spinlock);
-    threadlist_remove(rw->rw_list, curthread);
-    rw->rw_lock_count = rw->rw_list.tl_count;
+    spinlock_acquire(&rw->rwlock_spinlock);
+    threadlist_remove(&rw->rwlock_list, curthread);
 
-    if(rw->rw_lock_count == 0) {
-    // if it was in write mode, switch to read mode
+    if(rw->rwlock_list.tl_count == 0) {
     // or switch to write mode if it was in read mode
-        if(rw->rw_lock_mode == 1)
-            wchan_wakeall(&rw->read_wchan);
-        else
-            wchan_wakeone(&rw->write_wchan);
+			rw->rwlock_mode = 1;
+			rw->rwlock_count = 0;
+            wchan_wakeone(rw->writer_wchan);
     }
-    spinlock_release(&rw->rw_lock_spinlock);
+    spinlock_release(&rw->rwlock_spinlock);
 
 }
-*/
+
+void
+rwlock_release_write(struct rwlock *rw)
+{
+
+	KASSERT(rw != NULL);
+
+	spinlock_acquire(&rw->rwlock_spinlock);
+	threadlist_remove(&rw->rwlock_list, curthread);
+	
+	if (rw->rwlock_list.tl_count == 0) {
+
+		rw->rwlock_mode = -1;
+		rw->rwlock_count = 0;
+		wchan_wakeall(rw->reader_wchan);
+	}
+	spinlock_release(&rw->rwlock_spinlock);
+}
