@@ -36,6 +36,7 @@
 
 
 #include <spinlock.h>
+#include <thread.h>
 #include <threadlist.h>
 
 /*
@@ -147,6 +148,18 @@ void cv_broadcast(struct cv *cv, struct lock *lock);
  * 13 Feb 2012 : GWA : Reader-writer locks.
  */
 
+// @forkloop
+
+struct my_threadlist {
+    int count;
+    struct thread *t;
+    struct my_threadlist *next;
+};
+
+void my_threadlist_init(struct my_threadlist *);
+void my_threadlist_add(struct my_threadlist *, struct thread *);
+void my_threadlist_remove(struct my_threadlist *, struct thread *);
+
 struct rwlock {
         char *rwlock_name;
 		volatile int rwlock_mode;
@@ -154,7 +167,8 @@ struct rwlock {
 		struct spinlock rwlock_spinlock;
 		struct wchan *reader_wchan;
 		struct wchan *writer_wchan;
-		struct threadlist rwlock_list;
+		struct my_threadlist rwlock_list;
+		//struct threadlist rwlock_list;
 };
 
 struct rwlock * rwlock_create(const char *);

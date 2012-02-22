@@ -51,6 +51,9 @@ static struct lock *testlock;
 static struct cv *testcv;
 static struct semaphore *donesem;
 
+// @forkloop
+static struct rwlock *testrwlock;
+
 static
 void
 inititems(void)
@@ -78,6 +81,13 @@ inititems(void)
 		if (donesem == NULL) {
 			panic("synchtest: sem_create failed\n");
 		}
+	}
+	// @forkloop
+	if (testrwlock==NULL) {
+	    testrwlock = rwlock_create("testrwlock");
+	    if (testrwlock == NULL) {
+	        panic("synchtest: rwlock_create failed\n");
+	    }
 	}
 }
 
@@ -118,7 +128,7 @@ semtest(int nargs, char **args)
 	for (i=0; i<NTHREADS; i++) {
 		result = thread_fork("semtest", semtestthread, NULL, i, NULL);
 		if (result) {
-			panic("semtest: thread_fork failed: %s\n", 
+			panic("semtest: thread_fork failed: %s\n",
 			      strerror(result));
 		}
 	}
@@ -242,7 +252,7 @@ cvtestthread(void *junk, unsigned long num)
 				secs2--;
 				nsecs2 += 1000000000;
 			}
-			
+
 			nsecs2 -= nsecs1;
 			secs2 -= secs1;
 
@@ -301,4 +311,65 @@ cvtest(int nargs, char **args)
 	kprintf("CV test done\n");
 
 	return 0;
+}
+
+
+////////////////////////
+//// @forkloop
+///////////////////////
+static void
+rwltestthread(void *junk, unsigned long num)
+{
+    int prob, count;
+
+    (void)junk;
+
+    prob = random()%10;
+
+    if(prob<2) {
+        rwlock_acquire_write(testrwlock);
+        count = 10000;
+        while(count>0)
+            count--;
+        rwlock_release_write(testrwlock);
+    }
+    else {
+        rwlock_acquire_read(testrwlock);
+        count = 5000;
+        while(count>0)
+            count--;
+        rwlock_release_read(testrwlock);
+    }
+
+    kprintf("Read-Write lock %lu for %s\n", num, (prob < 2 ? "write" : "read"));
+    V(donesem);
+}
+
+int
+rwltest(int nargs, char **args)
+{
+    int i, result;
+
+    (void)nargs;
+    (void)args;
+
+    inititems();
+    kprintf("Starting Read-Write Lock test...\n");
+    kprintf("\n");
+
+    //testval1 = ;
+
+    for(i=0;i<NTHREADS;i++) {
+        result = thread_fork("synchtest", rwltestthread, NULL, i, NULL);
+        if(result) {
+            panic("rwltest: thread_fork failed: %s\n", strerror(result));
+        }
+    }
+    for(i=0; i<NTHREADS;i++) {
+        P(donesem);
+    }
+
+    kprintf("RWL test done\n");
+
+    return 0;
 }

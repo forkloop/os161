@@ -47,6 +47,10 @@
 // functions will allow you to do local initialization. They are called at
 // the top of the corresponding driver code.
 
+
+/////////////////////////////////////////FIXME////////////////////////////////////////////
+#define NMATING 10
+
 struct lock *pop_lock;
 struct cv *maker_cv;
 
@@ -56,9 +60,9 @@ volatile int male_head, male_tail, female_head, female_tail;
 
 void whalemating_init() {
 
-    extern int male_head, male_tail, female_head, female_tail;
-    extern struct lock *pop_lock;
-    extern struct cv *maker_cv;
+    //extern int male_head, male_tail, female_head, female_tail;
+    //extern struct lock *pop_lock;
+    //extern struct cv *maker_cv;
 
     male_head = male_tail = 0;
     female_head = female_tail = 0;
@@ -83,8 +87,7 @@ void whalemating_cleanup() {
 
     lock_destroy(pop_lock);
     cv_destroy(maker_cv);
-
-  return;
+  //return;
 }
 
 void
@@ -95,10 +98,10 @@ male(void *p, unsigned long which)
 
   male_start();
 	// Implement this function
-    extern int male_tail, female_head, female_tail;
-    extern unsigned long male_pop[];
-    extern struct lock *pop_lock;
-    extern struct cv *maker_cv;
+    //extern int male_tail, female_head, female_tail;
+    //extern unsigned long male_pop[];
+    //extern struct lock *pop_lock;
+    //extern struct cv *maker_cv;
 
     lock_acquire(pop_lock);
     male_pop[male_tail++] = which;
@@ -123,10 +126,10 @@ female(void *p, unsigned long which)
 
   female_start();
 	// Implement this function
-    extern int male_head, male_tail, female_tail;
-    extern unsigned long female_pop[];
-    extern struct lock *pop_lock;
-    extern struct cv *maker_cv;
+    //extern int male_head, male_tail, female_tail;
+    //extern unsigned long female_pop[];
+    //extern struct lock *pop_lock;
+    //extern struct cv *maker_cv;
 
     lock_acquire(pop_lock);
     female_pop[female_tail++] = which;
@@ -150,10 +153,10 @@ matchmaker(void *p, unsigned long which)
 
   matchmaker_start();
 	// Implement this function
-    extern int male_head, male_tail, female_head, female_tail;
-    extern unsigned long male_pop[], female_pop[];
-    extern struct lock *pop_lock;
-    extern struct cv *maker_cv;
+    //extern int male_head, male_tail, female_head, female_tail;
+    //extern unsigned long male_pop[], female_pop[];
+    //extern struct lock *pop_lock;
+    //extern struct cv *maker_cv;
 
 	lock_acquire(pop_lock);
 	while((male_head==male_tail)||(female_head==female_tail))
@@ -246,7 +249,10 @@ void stoplight_init() {
 // care if your problems leak memory, but if you do, use this to clean up.
 
 void stoplight_cleanup() {
-  return;
+
+    lock_destroy(quad_lock);
+    cv_destroy(quad_cv);
+  //return;
 }
 
 void

@@ -334,6 +334,63 @@ cv_broadcast(struct cv *cv, struct lock *lock)
 
 
 ////////////////////////////////////////////////////////////
+// my_threadlist
+//
+
+void my_threadlist_init(struct my_threadlist *p)
+{
+    DEBUGASSERT(p != NULL);
+
+    p->count = 0;
+    p->next = NULL;
+
+}
+
+void my_threadlist_add(struct my_threadlist *p, struct thread *t)
+{
+    DEBUGASSERT(p != NULL);
+    DEBUGASSERT(t != NULL);
+
+    struct my_threadlist *cursor, *node;
+
+    // malloc a new node
+    node = kmalloc(sizeof(struct my_threadlist));
+    if(node == NULL) {
+        panic("my_threadlist_add: add new thread failed.\n");
+    }
+    node->next = NULL;
+    node->t = t;
+
+    cursor = p;
+    while(cursor->next != NULL) {
+        cursor = cursor->next;
+    }
+    cursor->next = node;
+    p->count++;
+}
+
+void my_threadlist_remove(struct my_threadlist *p, struct thread *t)
+{
+    DEBUGASSERT(p != NULL);
+    DEBUGASSERT(t != NULL);
+
+    struct my_threadlist *c1, *c2;
+
+    c1 = p;
+    c2 = p->next;
+
+    while(c2 != NULL) {
+        if(c2->t == t) {
+            c1->next = c2->next;
+            p->count--;
+            kfree(c2);
+            break;
+        }
+        c1 = c2;
+        c2 = c2->next;
+    }
+}
+////////////////////////////////////////////////////////////
 //
 // Reader-Writer Lock.
 
@@ -356,14 +413,14 @@ rwlock_create(const char *name)
         }
 
 	// reader wait channel
-    read_wchan_name = kmalloc(strlen(name) + 5);
+    read_wchan_name = kmalloc(5*sizeof(char));
     if (read_wchan_name == NULL) {
         return NULL;
     }
 	// use snprintf
-    read_wchan_name = strcat(read_wchan_name, name);
-    read_wchan_name = strcat(read_wchan_name, "read\0");
-	rw->reader_wchan = wchan_create(read_wchan_name);
+    //read_wchan_name = strcat(read_wchan_name, name);
+    //read_wchan_name = strcat(read_wchan_name, "read\0");
+	rw->reader_wchan = wchan_create("read");
 	if (rw->reader_wchan == NULL) {
 	    kfree(read_wchan_name);
 		kfree(rw->rwlock_name);
@@ -372,13 +429,13 @@ rwlock_create(const char *name)
 	}
 
 	// writer wait channel
-    write_wchan_name = kmalloc(strlen(name) + 6);
+    write_wchan_name = kmalloc(6*sizeof(char));
     if (write_wchan_name == NULL) {
         return NULL;
     }
-    write_wchan_name = strcat(write_wchan_name, name);
-    write_wchan_name = strcat(write_wchan_name, "write\0");
-    rw->writer_wchan = wchan_create(write_wchan_name);
+    //write_wchan_name = strcat(write_wchan_name, name);
+    //write_wchan_name = strcat(write_wchan_name, "write\0");
+    rw->writer_wchan = wchan_create("write");
     if (rw->writer_wchan == NULL) {
         kfree(read_wchan_name);
         kfree(write_wchan_name);
@@ -388,7 +445,8 @@ rwlock_create(const char *name)
     }
 
 	spinlock_init(&rw->rwlock_spinlock);
-    threadlist_init(&rw->rwlock_list);
+    //threadlist_init(&rw->rwlock_list);
+    my_threadlist_init(&rw->rwlock_list);
 
     rw->rwlock_count = 0;
     rw->rwlock_mode = 0;
@@ -408,9 +466,8 @@ rwlock_destroy(struct rwlock *rw)
 
 	wchan_destroy(rw->writer_wchan);
 	wchan_destroy(rw->reader_wchan);
-	threadlist_cleanup(&rw->rwlock_list);
+	//threadlist_cleanup(&rw->rwlock_list);
 	spinlock_cleanup(&rw->rwlock_spinlock);
-	// FIXME rwlock_list ??
     kfree(rw->rwlock_name);
     kfree(rw);
 
@@ -434,7 +491,8 @@ rwlock_acquire_read(struct rwlock *rw)
         }
         // else add it into the threadlist
         else {
-            threadlist_addhead(&rw->rwlock_list, curthread);
+            //threadlist_addhead(&rw->rwlock_list, curthread);
+            my_threadlist_add(&rw->rwlock_list, curthread);
             rw->rwlock_count++;
             spinlock_release(&rw->rwlock_spinlock);
         }
@@ -450,7 +508,8 @@ rwlock_acquire_read(struct rwlock *rw)
         rw->rwlock_mode = -1;
         rw->rwlock_count = 1; // safer
 		//rw->rwlock_count++;
-        threadlist_addhead(&rw->rwlock_list, curthread);
+        //threadlist_addhead(&rw->rwlock_list, curthread);
+        my_threadlist_add(&rw->rwlock_list, curthread);
         spinlock_release(&rw->rwlock_spinlock);
     }
 }
@@ -466,16 +525,18 @@ rwlock_acquire_write(struct rwlock *rw)
 
 		rw->rwlock_mode = 1;
 		rw->rwlock_count = 1;
-		threadlist_addhead(&rw->rwlock_list, curthread);
+		//threadlist_addhead(&rw->rwlock_list, curthread);
+		my_threadlist_add(&rw->rwlock_list, curthread);
 		spinlock_release(&rw->rwlock_spinlock);
-		
+
 	}
 	else if (rw->rwlock_mode == 1) {
 
 		if(rw->rwlock_count == 0) {
 
 			rw->rwlock_count = 1;
-			threadlist_addhead(&rw->rwlock_list, curthread);
+			//threadlist_addhead(&rw->rwlock_list, curthread);
+			my_threadlist_add(&rw->rwlock_list, curthread);
 			spinlock_release(&rw->rwlock_spinlock);
 		}
 		else {
@@ -501,13 +562,25 @@ rwlock_release_read(struct rwlock *rw)
     KASSERT(rw != NULL);
 
     spinlock_acquire(&rw->rwlock_spinlock);
-    threadlist_remove(&rw->rwlock_list, curthread);
+    //threadlist_remove(&rw->rwlock_list, curthread);
+    my_threadlist_remove(&rw->rwlock_list, curthread);
 
-    if(rw->rwlock_list.tl_count == 0) {
+    if(rw->rwlock_list.count == 0) {
     // or switch to write mode if it was in read mode
+        if(!wchan_isempty(rw->writer_wchan)) {
 			rw->rwlock_mode = 1;
 			rw->rwlock_count = 0;
             wchan_wakeone(rw->writer_wchan);
+        }
+        else if(!wchan_isempty(rw->reader_wchan)){
+            rw->rwlock_mode = -1;
+            rw->rwlock_count = 0;
+            wchan_wakeall(rw->reader_wchan);
+        }
+        else {
+            rw->rwlock_mode = 0;
+            rw->rwlock_count = 0;
+        }
     }
     spinlock_release(&rw->rwlock_spinlock);
 
@@ -520,13 +593,24 @@ rwlock_release_write(struct rwlock *rw)
 	KASSERT(rw != NULL);
 
 	spinlock_acquire(&rw->rwlock_spinlock);
-	threadlist_remove(&rw->rwlock_list, curthread);
-	
-	if (rw->rwlock_list.tl_count == 0) {
+	//threadlist_remove(&rw->rwlock_list, curthread);
+    my_threadlist_remove(&rw->rwlock_list, curthread);
 
-		rw->rwlock_mode = -1;
-		rw->rwlock_count = 0;
-		wchan_wakeall(rw->reader_wchan);
+	if (rw->rwlock_list.count == 0) {
+        if(!wchan_isempty(rw->reader_wchan)) {
+            rw->rwlock_mode = -1;
+            rw->rwlock_count = 0;
+            wchan_wakeall(rw->reader_wchan);
+        }
+        else if(!wchan_isempty(rw->writer_wchan)) {
+            rw->rwlock_mode = 1;
+            rw->rwlock_count = 0;
+            wchan_wakeone(rw->writer_wchan);
+        }
+        else {
+            rw->rwlock_mode = 0;
+            rw->rwlock_count = 0;
+        }
 	}
 	spinlock_release(&rw->rwlock_spinlock);
 }
