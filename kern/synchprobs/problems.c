@@ -47,6 +47,13 @@
 // functions will allow you to do local initialization. They are called at
 // the top of the corresponding driver code.
 
+struct lock *pop_lock;
+struct cv *maker_cv;
+
+volatile unsigned long male_pop[NMATING];
+volatile unsigned long female_pop[NMATING];
+volatile int male_head, male_tail, female_head, female_tail;
+
 void whalemating_init() {
 
     extern int male_head, male_tail, female_head, female_tail;
@@ -73,6 +80,10 @@ void whalemating_init() {
 // care if your problems leak memory, but if you do, use this to clean up.
 
 void whalemating_cleanup() {
+
+    lock_destroy(pop_lock);
+    cv_destroy(maker_cv);
+
   return;
 }
 
@@ -270,7 +281,7 @@ gostraight(void *p, unsigned long direction)
 	cv_signal(quad_cv, quad_lock);
 	lock_release(quad_lock);
 	leaveIntersection();
-	
+
   // 08 Feb 2012 : GWA : Please do not change this code. This is so that your
   // stoplight driver can return to the menu cleanly.
   V(stoplightMenuSemaphore);
@@ -284,7 +295,7 @@ turnleft(void *p, unsigned long direction)
   //(void)direction;
 
     // @forkloop
-	// 
+	//
     int next, nnext;
     next = (direction+3)%4;
     nnext = (direction+2)%4;
@@ -292,7 +303,7 @@ turnleft(void *p, unsigned long direction)
     lock_acquire(quad_lock);
 	while(quad_status[direction]||quad_status[next])
 		cv_wait(quad_cv, quad_lock);
-	
+
 	//quad_status[direction]=quad_status[next]=1;
 	inQuadrant(direction);
 	quad_status[next] = 1;

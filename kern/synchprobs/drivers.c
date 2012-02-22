@@ -114,14 +114,11 @@ whalemating(int nargs, char **args)
     }
   }
   sem_destroy(whalematingMenuSemaphore);
-<<<<<<< HEAD
-=======
 
   // 13 Feb 2012 : GWA : Students are WAY smarter than me, including Nikhil
   // Londhe.
   whalemating_cleanup();
 
->>>>>>> 25742757286d22e4b8cab5be4b432e85006bada1
 	return 0;
 }
 
