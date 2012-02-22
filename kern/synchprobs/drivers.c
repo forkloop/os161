@@ -65,14 +65,6 @@ matchmaker_end(void)
 
 struct semaphore * whalematingMenuSemaphore;
 
-// added
-struct lock *pop_lock;
-struct cv *maker_cv;
-
-volatile unsigned long male_pop[NMATING];
-volatile unsigned long female_pop[NMATING];
-volatile int male_head, male_tail, female_head, female_tail;
-
 int
 whalemating(int nargs, char **args)
 {
@@ -122,8 +114,14 @@ whalemating(int nargs, char **args)
     }
   }
   sem_destroy(whalematingMenuSemaphore);
-    lock_destroy(pop_lock);
-    cv_destroy(maker_cv);
+<<<<<<< HEAD
+=======
+
+  // 13 Feb 2012 : GWA : Students are WAY smarter than me, including Nikhil
+  // Londhe.
+  whalemating_cleanup();
+
+>>>>>>> 25742757286d22e4b8cab5be4b432e85006bada1
 	return 0;
 }
 
@@ -214,6 +212,10 @@ stoplight(int nargs, char **args)
   }
 
   sem_destroy(stoplightMenuSemaphore);
+
+  // 13 Feb 2012 : GWA : Students are WAY smarter than me, including Nikhil
+  // Londhe.
+  stoplight_cleanup();
 
   return 0;
 }
