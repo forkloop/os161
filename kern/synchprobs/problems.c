@@ -277,16 +277,18 @@ gostraight(void *p, unsigned long direction)
 	// second quadrant
 	lock_acquire(quad_lock);
 	quad_status[direction]=0;
-	cv_signal(quad_cv, quad_lock);
+    inQuadrant(next);
+    cv_broadcast(quad_cv, quad_lock);
+	//cv_signal(quad_cv, quad_lock);
 	lock_release(quad_lock);
-	inQuadrant(next);
 
 	// leave
 	lock_acquire(quad_lock);
 	quad_status[next]=0;
-	cv_signal(quad_cv, quad_lock);
+    leaveIntersection();
+    cv_broadcast(quad_cv, quad_lock);
+	//cv_signal(quad_cv, quad_lock);
 	lock_release(quad_lock);
-	leaveIntersection();
 
   // 08 Feb 2012 : GWA : Please do not change this code. This is so that your
   // stoplight driver can return to the menu cleanly.
@@ -311,9 +313,9 @@ turnleft(void *p, unsigned long direction)
 		cv_wait(quad_cv, quad_lock);
 
 	//quad_status[direction]=quad_status[next]=1;
-	inQuadrant(direction);
+	quad_status[direction]=1;
 	quad_status[next] = 1;
-	inQuadrant(next);
+	inQuadrant(direction);
 	//cv_signal(quad_cv);
 	lock_release(quad_lock);
 
@@ -321,18 +323,28 @@ turnleft(void *p, unsigned long direction)
 	lock_acquire(quad_lock);
 	while(quad_status[nnext])
 		cv_wait(quad_cv, quad_lock);
-	quad_status[next] = 0;
+	quad_status[direction]=0;
+	//quad_status[next] = 0;
+	inQuadrant(next);
 	quad_status[nnext] = 1;
-	cv_signal(quad_cv, quad_lock);
+    cv_broadcast(quad_cv, quad_lock);
+	//cv_signal(quad_cv, quad_lock);
 	lock_release(quad_lock);
-	inQuadrant(nnext);
 
 	// leave
 	lock_acquire(quad_lock);
-	quad_status[nnext] = 0;
-	cv_signal(quad_cv, quad_lock);
+	inQuadrant(nnext);
+	quad_status[next] = 0;
+    cv_broadcast(quad_cv, quad_lock);
+	//cv_signal(quad_cv, quad_lock);
 	lock_release(quad_lock);
+
+	lock_acquire(quad_lock);
 	leaveIntersection();
+	quad_status[nnext] = 0;
+    cv_broadcast(quad_cv, quad_lock);
+	//cv_signal(quad_cv, quad_lock);
+	lock_release(quad_lock);
 
   // 08 Feb 2012 : GWA : Please do not change this code. This is so that your
   // stoplight driver can return to the menu cleanly.
@@ -353,8 +365,15 @@ turnright(void *p, unsigned long direction)
 	while (quad_status[direction]) {
 		cv_wait(quad_cv, quad_lock);
 	}
-    inQuadrant(direction);
+	quad_status[direction] = 1;
+	inQuadrant(direction);
+    lock_release(quad_lock);
+
+    lock_acquire(quad_lock);
     leaveIntersection();
+    quad_status[direction]=0;
+    //cv_signal(quad_cv, quad_lock);
+    cv_broadcast(quad_cv, quad_lock);
     lock_release(quad_lock);
 
   // 08 Feb 2012 : GWA : Please do not change this code. This is so that your
