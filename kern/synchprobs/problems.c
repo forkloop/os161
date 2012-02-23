@@ -313,32 +313,28 @@ turnleft(void *p, unsigned long direction)
 		cv_wait(quad_cv, quad_lock);
 
 	//quad_status[direction]=quad_status[next]=1;
-	quad_status[direction]=1;
-	quad_status[next] = 1;
+	//quad_status[direction]=1;
 	inQuadrant(direction);
-	//cv_signal(quad_cv);
+	quad_status[next] = 1;
+	inQuadrant(next);
+	cv_broadcast(quad_cv, quad_lock);
 	lock_release(quad_lock);
 
 	// third quad
 	lock_acquire(quad_lock);
 	while(quad_status[nnext])
 		cv_wait(quad_cv, quad_lock);
-	quad_status[direction]=0;
+	//quad_status[direction]=0;
 	//quad_status[next] = 0;
-	inQuadrant(next);
+	//inQuadrant(next);
+	quad_status[next] = 0;
 	quad_status[nnext] = 1;
+    inQuadrant(nnext);
     cv_broadcast(quad_cv, quad_lock);
 	//cv_signal(quad_cv, quad_lock);
 	lock_release(quad_lock);
 
 	// leave
-	lock_acquire(quad_lock);
-	inQuadrant(nnext);
-	quad_status[next] = 0;
-    cv_broadcast(quad_cv, quad_lock);
-	//cv_signal(quad_cv, quad_lock);
-	lock_release(quad_lock);
-
 	lock_acquire(quad_lock);
 	leaveIntersection();
 	quad_status[nnext] = 0;
