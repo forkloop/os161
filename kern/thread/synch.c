@@ -400,6 +400,7 @@ rwlock_create(const char *name)
 {
     struct rwlock *rw;
     char *read_wchan_name, *write_wchan_name;
+    int name_len;
 
     rw = kmalloc(sizeof(struct rwlock));
     if (rw == NULL) {
@@ -412,15 +413,20 @@ rwlock_create(const char *name)
         return NULL;
         }
 
+    name_len = strlen(name);
 	// reader wait channel
-    read_wchan_name = kmalloc(5*sizeof(char));
+    read_wchan_name = kmalloc((name_len+5)*sizeof(char));
     if (read_wchan_name == NULL) {
         return NULL;
     }
+    read_wchan_name = strcat(read_wchan_name, name);
+    read_wchan_name = strcat(read_wchan_name, "read\0");
 	// use snprintf
+
     //read_wchan_name = strcat(read_wchan_name, name);
     //read_wchan_name = strcat(read_wchan_name, "read\0");
-	rw->reader_wchan = wchan_create("read");
+	//rw->reader_wchan = wchan_create("read");
+	rw->reader_wchan = wchan_create(read_wchan_name);
 	if (rw->reader_wchan == NULL) {
 	    kfree(read_wchan_name);
 		kfree(rw->rwlock_name);
@@ -429,13 +435,14 @@ rwlock_create(const char *name)
 	}
 
 	// writer wait channel
-    write_wchan_name = kmalloc(6*sizeof(char));
+    write_wchan_name = kmalloc((name_len+6)*sizeof(char));
     if (write_wchan_name == NULL) {
         return NULL;
     }
-    //write_wchan_name = strcat(write_wchan_name, name);
-    //write_wchan_name = strcat(write_wchan_name, "write\0");
-    rw->writer_wchan = wchan_create("write");
+    write_wchan_name = strcat(write_wchan_name, name);
+    write_wchan_name = strcat(write_wchan_name, "write\0");
+    //rw->writer_wchan = wchan_create("write");
+    rw->writer_wchan = wchan_create(write_wchan_name);
     if (rw->writer_wchan == NULL) {
         kfree(read_wchan_name);
         kfree(write_wchan_name);
